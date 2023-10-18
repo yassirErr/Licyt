@@ -3,6 +3,8 @@ using AuctionService.DTOs;
 using AuctionService.Entities;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using Contracts;
+using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,11 +17,13 @@ public class AuctionController : ControllerBase
 {
     private readonly AuctionDbContext _context;
     private readonly IMapper _mapper;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public AuctionController(AuctionDbContext context , IMapper mapper)
+    public AuctionController(AuctionDbContext context , IMapper mapper,IPublishEndpoint publishEndpoint)
     {
         _context = context;
         _mapper = mapper;
+        _publishEndpoint = publishEndpoint;
     }
 
 
@@ -58,11 +62,16 @@ public class AuctionController : ControllerBase
         //TODO: add current user as seller 
         auction.Seller ="seller1";
         _context.Auctions.Add(auction);
-        var result = await _context.SaveChangesAsync() > 0;
 
+        var newAuction = _mapper.Map<AuctionDto>(auction);
+        await _publishEndpoint.Publish(_mapper.Map<AuctionCreated>(newAuction));
+
+        var result = await _context.SaveChangesAsync() > 0;
         if (!result) return BadRequest("Could not save changes to th Bd");
-        return CreatedAtAction(nameof(GetAuctionById),new{auction.Id},_mapper.Map<AuctionDto>(auction));
+        return CreatedAtAction(nameof(GetAuctionById),new{auction.Id},newAuction);
     }
+
+
 
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateAuction(Guid id,UpdateAuctionDto updateAuctionDto)
@@ -74,25 +83,35 @@ public class AuctionController : ControllerBase
 
         // TODO: check seller == username
  
-        auction.Item.Make = updateAuctionDto.Make ?? auction.Item.Make;
-        auction.Item.Model = updateAuctionDto.Model ?? auction.Item.Model;
-        auction.Item.Color = updateAuctionDto.Color ?? auction.Item.Color;
-        auction.Item.Mileage = updateAuctionDto.Mileage ?? auction.Item.Mileage;
-        auction.Item.Year = updateAuctionDto.Year ?? auction.Item.Year;
+        auction.Item.Make       = updateAuctionDto.Make ?? auction.Item.Make;
+        auction.Item.Model      = updateAuctionDto.Model ?? auction.Item.Model;
+        auction.Item.Color      = updateAuctionDto.Color ?? auction.Item.Color;
+        auction.Item.Mileage    = updateAuctionDto.Mileage ?? auction.Item.Mileage;
+        auction.Item.Year       = updateAuctionDto.Year ?? auction.Item.Year;
 
-        var result = await _context.SaveChangesAsync() > 0;
-        if (result) return Ok();
+        await _publishEndpoint.Publish(_mapper.Map<AuctionUpdated>(auction));
+
+        var results = await _context.SaveChangesAsync() > 0;
+        if (results) return Ok();
          return BadRequest("Problem Saving Changed");
     }
+
     [HttpDelete("{id}")]
 
     public async Task<IActionResult> DeleteAuction(Guid id) 
     {
         var auction = await _context.Auctions.FindAsync(id);
+
         if (auction == null) return NotFound();
+
         _context.Auctions.Remove(auction);
+
+        await _publishEndpoint.Publish<AuctionDeleted>(new { Id = auction.Id.ToString() });
+
         var result =await _context.SaveChangesAsync() > 0;
-        if (!result) return BadRequest("there is not auction");
+
+        if (!result) return BadRequest("Could not delete DB");
+
         return Ok();
     }
 }

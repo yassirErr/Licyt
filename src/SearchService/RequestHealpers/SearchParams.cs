@@ -1,6 +1,6 @@
 ﻿namespace SearchService.RequestHealpers;
 
-public class SearchPrams
+public class SearchParams
 {
     public string SearchTerm { get; set; }
     public int PageNumber { get; set; } = 1;

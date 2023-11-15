@@ -67,8 +67,8 @@ public class AuctionController : ControllerBase
         var newAuction = _mapper.Map<AuctionDto>(auction);
         await _publishEndpoint.Publish(_mapper.Map<AuctionCreated>(newAuction));
 
-        var result = await _context.SaveChangesAsync() > 0;
-        if (!result) return BadRequest("Could not save changes to th Bd");
+        var results = await _context.SaveChangesAsync() > 0;
+        if (!results) return BadRequest("Could not save changes to th Bd");
         return CreatedAtAction(nameof(GetAuctionById),new{auction.Id},newAuction);
     }
 
@@ -93,8 +93,8 @@ public class AuctionController : ControllerBase
 
         await _publishEndpoint.Publish(_mapper.Map<AuctionUpdated>(auction));
 
-        var results = await _context.SaveChangesAsync() > 0;
-        if (results) return Ok();
+        var result = await _context.SaveChangesAsync() > 0;
+        if (result) return Ok();
          return BadRequest("Problem Saving Changed");
     }
     [Authorize]
